@@ -1,0 +1,11 @@
+{
+  "name": "compose-demo",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "redis": "^4.7.0"
+  },
+  "scripts": {
+    "start": "node app/server.js"
+  }
+}

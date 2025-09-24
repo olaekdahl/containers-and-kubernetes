@@ -1,0 +1,21 @@
+name: KinD 02 - Service & Rollout
+on: 
+  workflow_dispatch:
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: helm/kind-action@v1.10.0
+      - uses: azure/setup-kubectl@v4
+      - name: Swap image tag in all manifests
+        run: |
+          IMG="ghcr.io/${{ github.repository }}"; TAG="sha-${{ github.sha }}"
+          for f in k8s-kind-demos/02-service-and-rollout/k8s/*.yaml; do
+            sed -i "s#ghcr.io/OWNER/REPO:sha-PLACEHOLDER#${IMG}:${TAG}#g" "$f"
+          done
+      - run: kubectl apply -f k8s-kind-demos/02-service-and-rollout/k8s
+      - run: kubectl rollout status deploy/hello --timeout=180s
+      - name: Test Service
+        run: |
+          kubectl run tmp --rm -i --restart=Never --image=curlimages/curl --             sh -c 'for i in $(seq 1 5); do curl -s http://hello.default.svc.cluster.local/ | tee /dev/stderr; sleep 1; done'

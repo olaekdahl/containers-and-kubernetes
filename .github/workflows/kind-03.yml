@@ -1,0 +1,38 @@
+name: KinD 03 - Ingress & HPA
+on:
+  workflow_dispatch:
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: helm/kind-action@v1.10.0
+        with:
+          node_image: kindest/node:v1.30.0
+      - uses: azure/setup-kubectl@v4
+
+      - name: Metrics Server
+        run: |
+          kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+          kubectl -n kube-system rollout status deploy/metrics-server --timeout=180s
+
+      - name: Ingress-NGINX
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+          kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=240s
+
+      - name: Apply Manifests
+        run: |
+          IMG="ghcr.io/${{ github.repository }}"; TAG="sha-${{ github.sha }}"
+          for f in k8s-kind-demos/03-ingress-and-hpa/k8s/*.yaml; do
+            sed -i "s#ghcr.io/OWNER/REPO:sha-PLACEHOLDER#${IMG}:${TAG}#g" "$f" || true
+          done
+          kubectl apply -f k8s-kind-demos/03-ingress-and-hpa/k8s
+          kubectl rollout status deploy/hello --timeout=240s
+
+      - name: Generate Load
+        run: |
+          kubectl run load --rm -i --restart=Never --image=curlimages/curl --             sh -c 'for i in $(seq 1 200); do curl -s http://hello.default.svc.cluster.local/ > /dev/null; done'
+          sleep 20
+          kubectl get hpa
+          kubectl get deploy hello -o wide

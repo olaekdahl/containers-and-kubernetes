@@ -1,0 +1,1 @@
+{ "name":"hello-docker","type":"module","private":true,"scripts":{"start":"node app/server.js"} }

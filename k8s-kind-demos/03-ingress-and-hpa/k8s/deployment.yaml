@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: hello }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: hello } }
+  template:
+    metadata: { labels: { app: hello } }
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/OWNER/REPO:sha-PLACEHOLDER
+          ports: [{ containerPort: 3000 }]
+          readinessProbe: { httpGet: { path: "/", port: 3000 } }
