@@ -54,6 +54,18 @@ jobs:
           kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
           kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=240s
 
+      - name: Build sample image
+        run: |
+          set -euxo pipefail
+          IMG="ghcr.io/${{ github.repository }}"; TAG="sha-${{ github.sha }}"
+          docker build -t "${IMG}:${TAG}" docker-demos/01-hello-docker
+
+      - name: Load image into KinD
+        run: |
+          set -euxo pipefail
+          IMG="ghcr.io/${{ github.repository }}"; TAG="sha-${{ github.sha }}"
+          kind load docker-image "${IMG}:${TAG}"
+
       - name: Apply Manifests
         run: |
           IMG="ghcr.io/${{ github.repository }}"; TAG="sha-${{ github.sha }}"
