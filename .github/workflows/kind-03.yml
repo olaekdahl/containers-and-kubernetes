@@ -64,7 +64,8 @@ jobs:
         run: |
           set -euxo pipefail
           IMG="ghcr.io/${{ github.repository }}"; TAG="sha-${{ github.sha }}"
-          kind load docker-image "${IMG}:${TAG}"
+          CLUSTER="${KIND_CLUSTER_NAME:-chart-testing}"
+          kind load docker-image --name "${CLUSTER}" "${IMG}:${TAG}"
 
       - name: Apply Manifests
         run: |
