@@ -18,35 +18,30 @@ jobs:
           # Install upstream manifests
           kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 
-          # Ensure KinD-friendly args (self-signed kubelet certs)
+          # Patch args for KinD: trust kubelet self-signed cert, prefer internal IPs,
+          # and use node status port (common in containerized kubelets)
           kubectl -n kube-system patch deploy/metrics-server --type='json' -p='[
             {"op":"add","path":"/spec/template/spec/containers/0/args","value":[
               "--cert-dir=/tmp",
               "--kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname",
-              "--kubelet-insecure-tls"
+              "--kubelet-insecure-tls",
+              "--kubelet-use-node-status-port"
             ]}
           ]' || true
 
-          # 1) Remove rollingUpdate if present
-          kubectl -n kube-system patch deploy/metrics-server --type='json' -p='[
-            {"op":"remove","path":"/spec/strategy/rollingUpdate"}
-          ]' || true
+          # Force a clean restart to avoid rolling-update deadlock
+          kubectl -n kube-system scale deploy/metrics-server --replicas=0
+          kubectl -n kube-system wait --for=delete pod -l k8s-app=metrics-server --timeout=120s || true
+          kubectl -n kube-system scale deploy/metrics-server --replicas=1
 
-          # 2) Set strategy to Recreate
-          kubectl -n kube-system patch deploy/metrics-server --type='json' -p='[
-            {"op":"replace","path":"/spec/strategy/type","value":"Recreate"}
-          ]' || true
-
-          # Bounce the pod so new args/strategy take effect quickly
-          kubectl -n kube-system delete pod -l k8s-app=metrics-server --wait=false || true
-
-          # Wait for the Deployment and the aggregated API
+          # Wait for Deployment, then the aggregated API
           kubectl -n kube-system rollout status deploy/metrics-server --timeout=300s
           kubectl wait --for=condition=Available --timeout=180s apiservice/v1beta1.metrics.k8s.io
 
-          # Sanity checks (non-fatal)
+          # Sanity (non-fatal)
           kubectl top nodes || true
           kubectl top pods -A || true
+
 
       - name: Ingress-NGINX
         run: |
