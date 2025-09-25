@@ -17,23 +17,6 @@ jobs:
       IMAGE_TAG: sha-${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
-      # - name: Login to Docker Hub (CLI)
-      #   run: |
-      #     echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login \
-      #       -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-      - name: Assert Hub secrets exist
-        run: |
-          [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] || { echo "DOCKERHUB_USERNAME missing"; exit 1; }
-          [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ] || { echo "DOCKERHUB_TOKEN missing"; exit 1; }
-          echo "Username length: $(printf %s "${{ secrets.DOCKERHUB_USERNAME }}" | wc -c)"
-          echo "Token length: $(printf %s "${{ secrets.DOCKERHUB_TOKEN }}" | wc -c)"
-      - name: Docker Hub logout (clean slate)
-        run: docker logout || true
-      - name: Login to Docker Hub (CLI, pinned registry)
-        run: |
-          printf %s "${{ secrets.DOCKERHUB_TOKEN }}" | docker login \
-            https://index.docker.io/v1/ \
-            -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
       - name: Hadolint
         uses: hadolint/hadolint-action@v3.1.0
         with:
@@ -47,10 +30,10 @@ jobs:
           output: trivy.sarif
       - uses: github/codeql-action/upload-sarif@v3
         with: { sarif_file: trivy.sarif }
-
       - uses: docker/setup-qemu-action@v3
+        with:
+          image: public.ecr.aws/eks-distro-build-tooling/binfmt-misc:latest
       - uses: docker/setup-buildx-action@v3
-
       - name: Login GHCR
         uses: docker/login-action@v3
         with:
