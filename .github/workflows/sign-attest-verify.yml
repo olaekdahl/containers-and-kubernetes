@@ -70,9 +70,11 @@ jobs:
       - name: Verify Signature
         run: |
           cosign verify "$IMAGE_REF_DIGEST" \
+            --certificate-identity-regexp "https://github.com/${{ github.repository }}/.*" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             > verify-signature.txt
           tail -n +1 verify-signature.txt
+
 
       - name: Verify Attestation (SPDX)
         run: |
