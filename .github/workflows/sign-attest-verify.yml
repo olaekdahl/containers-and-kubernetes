@@ -1,20 +1,24 @@
-name: Cosign - Sign, Attest, Verify
+name: Cosign - Build, Sign, Attest, Verify
 on:
-  # push:
-  #   branches: [ main ]
   workflow_dispatch:
+
 jobs:
   cosign:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write        # OIDC for keyless
-      packages: write        # pull/push to GHCR
+      id-token: write        # OIDC for keyless signing
+      packages: write        # push to GHCR
       contents: read
     env:
       IMAGE_REF: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
       COSIGN_EXPERIMENTAL: "1"
     steps:
       - uses: actions/checkout@v4
+
+      # Buildx without pulling moby/buildkit from Docker Hub
+      - uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
 
       - name: Login GHCR
         uses: docker/login-action@v3
@@ -23,43 +27,64 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Build & push THIS commit's image (ensures the tag exists)
+      - name: Build & push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: docker-demos/01-hello-docker
+          push: true
+          platforms: linux/amd64
+          tags: ${{ env.IMAGE_REF }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Compose a digest reference: ghcr.io/owner/repo@sha256:...
+      - name: Compute digest ref
+        run: |
+          echo "IMAGE_REF_DIGEST=${IMAGE_REF%@*}@${{ steps.build.outputs.digest }}" >> "$GITHUB_ENV"
+        env:
+          IMAGE_REF: ${{ env.IMAGE_REF }}
+
       - name: Install cosign
         uses: sigstore/cosign-installer@v3.6.0
 
-      - name: Ensure image exists (optional pull)
-        run: docker pull "$IMAGE_REF" || echo "Image not locally present; proceeding"
+      # Sign by DIGEST (avoids tag-move issues)
+      - name: Cosign sign (keyless, by digest)
+        run: cosign sign --yes "$IMAGE_REF_DIGEST"
 
-      - name: Sign (keyless via OIDC)
-        run: |
-          cosign sign --yes "$IMAGE_REF"
-
+      # Generate SBOM for the image (by digest) and save to workspace
       - name: Generate SBOM (SPDX) for image
         uses: anchore/sbom-action@v0
         with:
-          image: ${{ env.IMAGE_REF }}
+          image: ${{ env.IMAGE_REF_DIGEST }}
           format: spdx-json
-          output-file: sbom.spdx.json   # <-- write to workspace
-          # optional: avoid uploading a separate artifact from this step
+          output-file: sbom.spdx.json
           upload-artifact: false
-      - name: Attest SBOM
-        run: |
-          # sbom.spdx.json produced by the previous step in workspace root
-          test -f sbom.spdx.json || { echo "SBOM not found"; ls -la; exit 1; }
-          cosign attest --yes --predicate sbom.spdx.json --type spdx "$IMAGE_REF"
 
+      # Attach SBOM as an attestation to the image digest
+      - name: Cosign attest SBOM (by digest)
+        run: |
+          test -f sbom.spdx.json || { echo "SBOM not found"; ls -la; exit 1; }
+          cosign attest --yes --predicate sbom.spdx.json --type spdx "$IMAGE_REF_DIGEST"
+
+      # Verify signature and attestation (by digest)
       - name: Verify Signature
         run: |
-          cosign verify "$IMAGE_REF"             --certificate-oidc-issuer https://token.actions.githubusercontent.com > verify-signature.txt
-          echo "Signature verification output:"
+          cosign verify "$IMAGE_REF_DIGEST" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            > verify-signature.txt
           tail -n +1 verify-signature.txt
 
       - name: Verify Attestation (SPDX)
         run: |
-          cosign verify-attestation "$IMAGE_REF"             --type spdx             --certificate-oidc-issuer https://token.actions.githubusercontent.com > verify-attestation.txt
-          echo "Attestation verification output:"
+          cosign verify-attestation "$IMAGE_REF_DIGEST" \
+            --type spdx \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            > verify-attestation.txt
           tail -n +1 verify-attestation.txt
 
-      - name: Upload verification logs
+      - name: Upload verification logs & SBOM
         uses: actions/upload-artifact@v4
         with:
           name: cosign-verify-logs
@@ -68,7 +93,9 @@ jobs:
             verify-attestation.txt
             sbom.spdx.json
 
-      # Optional: enforce stricter identity pinning (uncomment & set correct value)
+      # Optional: enforce stricter identity pinning
       # - name: Verify with identity pinning
       #   run: |
-      #     cosign verify "$IMAGE_REF"       #       --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/docker-ci.yml@refs/heads/main"       #       --certificate-oidc-issuer https://token.actions.githubusercontent.com
+      #     cosign verify "$IMAGE_REF_DIGEST" \
+      #       --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/<THIS_FILE>.yml@refs/heads/main" \
+      #       --certificate-oidc-issuer https://token.actions.githubusercontent.com
