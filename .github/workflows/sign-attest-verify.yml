@@ -80,10 +80,10 @@ jobs:
         run: |
           cosign verify-attestation "$IMAGE_REF_DIGEST" \
             --type spdx \
+            --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/sign-attest-verify.yml@refs/heads/main" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             > verify-attestation.txt
           tail -n +1 verify-attestation.txt
-
       - name: Upload verification logs & SBOM
         uses: actions/upload-artifact@v4
         with:
