@@ -21,6 +21,12 @@ jobs:
       #   run: |
       #     echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login \
       #       -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+      - name: Assert Hub secrets exist
+        run: |
+          [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] || { echo "DOCKERHUB_USERNAME missing"; exit 1; }
+          [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ] || { echo "DOCKERHUB_TOKEN missing"; exit 1; }
+          echo "Username length: $(printf %s "${{ secrets.DOCKERHUB_USERNAME }}" | wc -c)"
+          echo "Token length: $(printf %s "${{ secrets.DOCKERHUB_TOKEN }}" | wc -c)"
       - name: Docker Hub logout (clean slate)
         run: docker logout || true
       - name: Login to Docker Hub (CLI, pinned registry)
