@@ -19,14 +19,9 @@ jobs:
           # Install pinned release
           kubectl apply -f "https://github.com/kubernetes-sigs/metrics-server/releases/download/${VERSION}/components.yaml"
 
-          # Patch args for KinD / CI (self-signed kubelet certs, internal IPs, node status port)
+          # Patch args for KinD / CI to trust kubelet certs while keeping upstream defaults intact
           kubectl -n kube-system patch deploy/metrics-server --type='json' -p='[
-            {"op":"add","path":"/spec/template/spec/containers/0/args","value":[
-              "--cert-dir=/tmp",
-              "--kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname",
-              "--kubelet-insecure-tls",
-              "--kubelet-use-node-status-port"
-            ]}
+            {"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}
           ]' || true
 
           # In some CI networks the pod needs host networking to reach kubelets
