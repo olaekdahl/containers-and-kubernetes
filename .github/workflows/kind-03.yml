@@ -15,11 +15,10 @@ jobs:
         run: |
           set -euxo pipefail
 
-          # Install metrics-server manifests
+          # Install upstream manifests
           kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 
-          # Patch deployment to work on KinD (self-signed kubelet)
-          # If args already exist, this JSON patch replaces them; if not, it creates them.
+          # Ensure KinD-friendly args (self-signed kubelet certs)
           kubectl -n kube-system patch deploy/metrics-server --type='json' -p='[
             {"op":"add","path":"/spec/template/spec/containers/0/args","value":[
               "--cert-dir=/tmp",
@@ -28,14 +27,21 @@ jobs:
             ]}
           ]' || true
 
-          # Wait for rollout
+          # Use Recreate strategy to avoid stuck rolling updates in CI
+          kubectl -n kube-system patch deploy/metrics-server -p '{"spec":{"strategy":{"type":"Recreate"}}}'
+
+          # Hard bounce any existing pod so new args apply immediately
+          kubectl -n kube-system delete pod -l k8s-app=metrics-server --wait=false || true
+
+          # Wait for deployment to become Ready
           kubectl -n kube-system rollout status deploy/metrics-server --timeout=300s
 
-          # (Optional) quick sanity check
-          sleep 5
+          # Also wait for the aggregated API to be marked Available
+          kubectl wait --for=condition=Available --timeout=120s apiservice/v1beta1.metrics.k8s.io
+
+          # Sanity checks (non-fatal)
           kubectl top nodes || true
           kubectl top pods -A || true
-
       - name: Ingress-NGINX
         run: |
           kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
