@@ -13,8 +13,28 @@ jobs:
 
       - name: Metrics Server
         run: |
+          set -euxo pipefail
+
+          # Install metrics-server manifests
           kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
-          kubectl -n kube-system rollout status deploy/metrics-server --timeout=180s
+
+          # Patch deployment to work on KinD (self-signed kubelet)
+          # If args already exist, this JSON patch replaces them; if not, it creates them.
+          kubectl -n kube-system patch deploy/metrics-server --type='json' -p='[
+            {"op":"add","path":"/spec/template/spec/containers/0/args","value":[
+              "--cert-dir=/tmp",
+              "--kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname",
+              "--kubelet-insecure-tls"
+            ]}
+          ]' || true
+
+          # Wait for rollout
+          kubectl -n kube-system rollout status deploy/metrics-server --timeout=300s
+
+          # (Optional) quick sanity check
+          sleep 5
+          kubectl top nodes || true
+          kubectl top pods -A || true
 
       - name: Ingress-NGINX
         run: |
