@@ -37,9 +37,10 @@ jobs:
         uses: anchore/sbom-action@v0
         with:
           image: ${{ env.IMAGE_REF }}
-          artifact-name: sbom.spdx.json
           format: spdx-json
-
+          output-file: sbom.spdx.json   # <-- write to workspace
+          # optional: avoid uploading a separate artifact from this step
+          upload-artifact: false
       - name: Attest SBOM
         run: |
           # sbom.spdx.json produced by the previous step in workspace root
