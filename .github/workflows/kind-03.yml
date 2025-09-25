@@ -27,21 +27,27 @@ jobs:
             ]}
           ]' || true
 
-          # Use Recreate strategy to avoid stuck rolling updates in CI
-          kubectl -n kube-system patch deploy/metrics-server -p '{"spec":{"strategy":{"type":"Recreate"}}}'
+          # 1) Remove rollingUpdate if present
+          kubectl -n kube-system patch deploy/metrics-server --type='json' -p='[
+            {"op":"remove","path":"/spec/strategy/rollingUpdate"}
+          ]' || true
 
-          # Hard bounce any existing pod so new args apply immediately
+          # 2) Set strategy to Recreate
+          kubectl -n kube-system patch deploy/metrics-server --type='json' -p='[
+            {"op":"replace","path":"/spec/strategy/type","value":"Recreate"}
+          ]' || true
+
+          # Bounce the pod so new args/strategy take effect quickly
           kubectl -n kube-system delete pod -l k8s-app=metrics-server --wait=false || true
 
-          # Wait for deployment to become Ready
+          # Wait for the Deployment and the aggregated API
           kubectl -n kube-system rollout status deploy/metrics-server --timeout=300s
-
-          # Also wait for the aggregated API to be marked Available
-          kubectl wait --for=condition=Available --timeout=120s apiservice/v1beta1.metrics.k8s.io
+          kubectl wait --for=condition=Available --timeout=180s apiservice/v1beta1.metrics.k8s.io
 
           # Sanity checks (non-fatal)
           kubectl top nodes || true
           kubectl top pods -A || true
+
       - name: Ingress-NGINX
         run: |
           kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
