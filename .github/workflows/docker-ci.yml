@@ -16,6 +16,12 @@ jobs:
       IMAGE_NAME: ghcr.io/${{ github.repository }}
       IMAGE_TAG: sha-${{ github.sha }}
     steps:
+      - name: Docker Hub login (CLI)
+        shell: bash
+        run: |
+          docker logout || true
+          USER_LC=$(echo "${{ secrets.DOCKERHUB_USERNAME }}" | tr '[:upper:]' '[:lower:]')
+          printf %s "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${USER_LC}" --password-stdin
       - uses: actions/checkout@v4
       - name: Hadolint
         uses: hadolint/hadolint-action@v3.1.0
