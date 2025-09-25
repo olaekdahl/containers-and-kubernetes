@@ -46,5 +46,3 @@ jobs:
           context: docker-demos/01-hello-docker
           push: ${{ github.ref == 'refs/heads/main' }}
           tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
