@@ -1,1 +1,12 @@
-{ "name":"hello-docker","type":"module","private":true,"scripts":{"start":"node app/server.js"} }
+{
+  "name": "hello-docker",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node app/server.js"
+  },
+  "dependencies": {
+    "express": "4.17.1",
+    "lodash": "4.17.15"
+  }
+}
